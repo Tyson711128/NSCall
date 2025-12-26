@@ -2,104 +2,111 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>NSCall DEBUG</title>
+<title>NSCall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
   body {
+    margin: 0;
     background: #000;
-    color: #0f0;
-    font-family: monospace;
-    padding: 20px;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
   }
+
   button {
-    font-size: 24px;
-    padding: 20px 40px;
-    margin: 10px 0;
+    font-size: 10vw;
+    padding: 60px 100px;
+    border-radius: 30px;
+    border: none;
+    background: #d32f2f;
+    color: #fff;
+    cursor: pointer;
   }
-  .ok { color: #0f0; }
-  .ng { color: #f00; }
+
+  #status {
+    margin-top: 30px;
+    font-size: 4vw;
+    opacity: 0.8;
+  }
+
+  .ok { color: #00e676; }
+  .ng { color: #ff5252; }
 </style>
 </head>
 <body>
 
-<h2>NSCall DEBUG</h2>
+<button id="callBtn">CALL</button>
+<div id="status" class="ng">未接続</div>
 
-<button id="btnListen">① 鳴らされる側</button>
-<button id="btnCall">② 呼ぶ</button>
-
-<div id="log"></div>
-
-<audio id="audio" src="audio.mp3"></audio>
+<audio id="sound" src="audio.mp3" preload="auto"></audio>
 
 <script type="module">
+/* ===== Firebase SDK ===== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore, doc, setDoc, onSnapshot, updateDoc, serverTimestamp
+  getFirestore,
+  doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const log = msg => {
-  document.getElementById("log").innerHTML += msg + "<br>";
-};
-
-log("▶ ページ読み込み完了");
-
+/* ===== Firebase 設定 ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyA-0pjEemq37VlZHd22Wh6iCELwanieQMg",
   authDomain: "nscall-35754.firebaseapp.com",
   projectId: "nscall-35754"
 };
 
+/* ===== 初期化 ===== */
 const app = initializeApp(firebaseConfig);
-log("✔ Firebase initializeApp OK");
-
 const db = getFirestore(app);
 const ref = doc(db, "calls", "main");
 
-const audio = document.getElementById("audio");
+/* ===== DOM ===== */
+const btn = document.getElementById("callBtn");
+const status = document.getElementById("status");
+const sound = document.getElementById("sound");
 
-// 音声ロード確認
-audio.onloadeddata = () => log("✔ audio.mp3 読み込み成功");
-audio.onerror = () => log("❌ audio.mp3 読み込み失敗（パス違い）");
+/* ===== 音声をユーザー操作で解放 ===== */
+btn.onclick = async () => {
+  // 自分の端末を即鳴動
+  sound.currentTime = 0;
+  sound.play();
 
-// 鳴らされる側
-btnListen.onclick = async () => {
-  log("▶ 鳴らされる側 開始");
-
-  // ユーザー操作で音声解放
-  try {
-    await audio.play();
-    audio.pause();
-    audio.currentTime = 0;
-    log("✔ 音声再生許可 OK");
-  } catch {
-    log("❌ 音声再生ブロック");
-  }
-
-  onSnapshot(ref, snap => {
-    log("📡 Firestore 変更検知");
-
-    if (snap.exists() && snap.data().ring === true) {
-      log("🔔 ring = true を検知");
-
-      audio.currentTime = 0;
-      audio.play()
-        .then(() => log("🔊 再生開始"))
-        .catch(() => log("❌ 再生失敗"));
-
-      updateDoc(ref, { ring: false });
-    }
-  });
-};
-
-// 呼ぶ側
-btnCall.onclick = async () => {
-  log("▶ 呼ぶボタン押下");
+  // Firestore に通知（他端末用）
   await setDoc(ref, {
-    ring: true,
+    ring: Date.now(),
     updatedAt: serverTimestamp()
   });
-  log("✔ Firestore に書き込み完了");
 };
+
+/* ===== Firestore 監視 ===== */
+onSnapshot(
+  ref,
+  snap => {
+    status.textContent = "接続中";
+    status.className = "ok";
+
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    if (!data.ring) return;
+
+    // 他端末からの通知を鳴動
+    sound.currentTime = 0;
+    sound.play();
+  },
+  err => {
+    status.textContent = "未接続";
+    status.className = "ng";
+  }
+);
 </script>
 
 </body>
