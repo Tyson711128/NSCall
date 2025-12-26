@@ -7,72 +7,84 @@
 
 <style>
   body {
-    font-family: system-ui, sans-serif;
-    background: #f4f6f8;
-    text-align: center;
     margin: 0;
-    padding-top: 12vh;
+    background: #000;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    text-align: center;
   }
-  h1 { font-size: 28px; }
-  h2 { font-size: 18px; color: #555; }
+
+  .screen {
+    display: none;
+    height: 100vh;
+    width: 100vw;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+
+  .screen.active {
+    display: flex;
+  }
+
+  h1 {
+    font-size: 4vw;
+    margin-bottom: 40px;
+  }
+
   button {
-    font-size: 28px;
-    padding: 20px 40px;
-    margin: 12px;
-    border-radius: 12px;
+    font-size: 6vw;
+    padding: 40px 80px;
+    margin: 20px;
+    border-radius: 20px;
     border: none;
     cursor: pointer;
   }
-  .hidden { display: none; }
-  .caller button { background: #e53935; color: #fff; }
-  .listener button { background: #1e88e5; color: #fff; }
+
+  .red {
+    background: #d32f2f;
+    color: #fff;
+  }
+
+  .blue {
+    background: #1976d2;
+    color: #fff;
+  }
 
   .status {
-    margin-top: 24px;
-    font-size: 16px;
-  }
-  .ok { color: #2e7d32; }
-  .ng { color: #c62828; }
-  .info { color: #1565c0; }
-
-  .log {
-    margin-top: 16px;
-    font-size: 14px;
-    color: #333;
+    margin-top: 30px;
+    font-size: 2.5vw;
+    opacity: 0.8;
   }
 </style>
 </head>
 <body>
 
-<!-- ===== 役割選択 ===== -->
-<div id="select">
+<!-- 役割選択 -->
+<div id="select" class="screen active">
   <h1>NSCall</h1>
-  <button id="selectCaller">鳴らす側</button><br>
-  <button id="selectListener">鳴らされる側</button>
+  <button class="red" id="btnCaller">鳴らす側</button>
+  <button class="blue" id="btnListener">鳴らされる側</button>
 </div>
 
-<!-- ===== 鳴らす側 ===== -->
-<div id="caller" class="hidden caller">
+<!-- 鳴らす側 -->
+<div id="caller" class="screen">
   <h1>呼び出し</h1>
-  <button id="callBtn">呼ぶ</button>
-  <div class="status info" id="callerStatus">未送信</div>
+  <button class="red" id="callBtn">呼ぶ</button>
+  <div class="status" id="callerStatus">待機中</div>
 </div>
 
-<!-- ===== 鳴らされる側 ===== -->
-<div id="listener" class="hidden listener">
-  <h1 id="listenerTitle">待機中</h1>
-  <button id="enableAudio">音声ON</button>
-
-  <div class="status ok" id="connStatus">Firebase 接続中</div>
-  <div class="log" id="lastCall">未受信</div>
+<!-- 鳴らされる側 -->
+<div id="listener" class="screen">
+  <h1 id="listenerTitle">音声を有効化してください</h1>
+  <button class="blue" id="enableAudio">音声ON</button>
+  <div class="status" id="listenerStatus"></div>
 </div>
 
 <audio id="sound" src="sound.mp3" preload="auto"></audio>
 
 <script type="module">
-/* ===============================
-   Firebase SDK
-================================ */
+/* ===== Firebase SDK ===== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getFirestore,
@@ -83,101 +95,66 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* ===============================
-   Firebase 設定
-================================ */
+/* ===== Firebase 設定 ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyA-0pjEemq37VlZHd22Wh6iCELwanieQMg",
   authDomain: "nscall-35754.firebaseapp.com",
   projectId: "nscall-35754"
 };
 
-/* ===============================
-   初期化
-================================ */
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const ref = doc(db, "calls", "main");
 
-/* ===============================
-   DOM
-================================ */
-const select = document.getElementById("select");
-const caller = document.getElementById("caller");
-const listener = document.getElementById("listener");
-
-const selectCaller = document.getElementById("selectCaller");
-const selectListener = document.getElementById("selectListener");
-
-const callBtn = document.getElementById("callBtn");
-const callerStatus = document.getElementById("callerStatus");
-
-const enableAudio = document.getElementById("enableAudio");
-const listenerTitle = document.getElementById("listenerTitle");
-const connStatus = document.getElementById("connStatus");
-const lastCall = document.getElementById("lastCall");
+/* ===== DOM ===== */
+const screens = {
+  select: document.getElementById("select"),
+  caller: document.getElementById("caller"),
+  listener: document.getElementById("listener")
+};
 
 const sound = document.getElementById("sound");
 
-/* ===============================
-   鳴らす側
-================================ */
-selectCaller.onclick = () => {
-  select.classList.add("hidden");
-  caller.classList.remove("hidden");
-};
+/* ===== 画面切替 ===== */
+function show(name) {
+  Object.values(screens).forEach(s => s.classList.remove("active"));
+  screens[name].classList.add("active");
+}
+
+/* ===== 鳴らす側 ===== */
+btnCaller.onclick = () => show("caller");
 
 callBtn.onclick = async () => {
-  callerStatus.textContent = "送信中...";
-  try {
-    await setDoc(ref, {
-      ring: true,
-      updatedAt: serverTimestamp()
-    });
-    callerStatus.textContent = "✅ 送信完了";
-    callerStatus.className = "status ok";
-  } catch (e) {
-    callerStatus.textContent = "❌ 送信失敗";
-    callerStatus.className = "status ng";
-  }
+  callerStatus.textContent = "送信中…";
+  await setDoc(ref, {
+    ring: true,
+    updatedAt: serverTimestamp()
+  });
+  callerStatus.textContent = "送信完了";
 };
 
-/* ===============================
-   鳴らされる側
-================================ */
-selectListener.onclick = () => {
-  select.classList.add("hidden");
-  listener.classList.remove("hidden");
+/* ===== 鳴らされる側 ===== */
+btnListener.onclick = () => show("listener");
 
-  onSnapshot(ref,
-    snap => {
-      connStatus.textContent = "🟢 Firebase 接続中";
-      connStatus.className = "status ok";
-
-      if (snap.exists() && snap.data().ring === true) {
-        const now = new Date().toLocaleTimeString();
-        listenerTitle.textContent = "🔔 呼び出し中";
-        lastCall.textContent = `受信時刻: ${now}`;
-
-        sound.currentTime = 0;
-        sound.play();
-
-        updateDoc(ref, { ring: false });
-      }
-    },
-    err => {
-      connStatus.textContent = "🔴 Firebase 未接続";
-      connStatus.className = "status ng";
-    }
-  );
-};
-
-// 音声有効化
 enableAudio.onclick = async () => {
+  // ★ ユーザー操作で音声を完全に解放
   await sound.play();
   sound.pause();
   sound.currentTime = 0;
+
   enableAudio.style.display = "none";
+  listenerTitle.textContent = "待機中";
+  listenerStatus.textContent = "Firebase 接続中";
+
+  // ★ ここで初めて Firestore を監視
+  onSnapshot(ref, async snap => {
+    if (snap.exists() && snap.data().ring === true) {
+      listenerTitle.textContent = "🔔 呼び出し中";
+      sound.currentTime = 0;
+      await sound.play();
+      await updateDoc(ref, { ring: false });
+    }
+  });
 };
 </script>
 
