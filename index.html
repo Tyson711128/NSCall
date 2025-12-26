@@ -2,100 +2,47 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>NSCall</title>
+<title>NSCall DEBUG</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <style>
   body {
-    margin: 0;
     background: #000;
-    color: #fff;
-    font-family: system-ui, sans-serif;
-    text-align: center;
+    color: #0f0;
+    font-family: monospace;
+    padding: 20px;
   }
-
-  .screen {
-    display: none;
-    height: 100vh;
-    width: 100vw;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-  }
-
-  .screen.active {
-    display: flex;
-  }
-
-  h1 {
-    font-size: 4vw;
-    margin-bottom: 40px;
-  }
-
   button {
-    font-size: 6vw;
-    padding: 40px 80px;
-    margin: 20px;
-    border-radius: 20px;
-    border: none;
-    cursor: pointer;
+    font-size: 24px;
+    padding: 20px 40px;
+    margin: 10px 0;
   }
-
-  .red {
-    background: #d32f2f;
-    color: #fff;
-  }
-
-  .blue {
-    background: #1976d2;
-    color: #fff;
-  }
-
-  .status {
-    margin-top: 30px;
-    font-size: 2.5vw;
-    opacity: 0.8;
-  }
+  .ok { color: #0f0; }
+  .ng { color: #f00; }
 </style>
 </head>
 <body>
 
-<!-- 役割選択 -->
-<div id="select" class="screen active">
-  <h1>NSCall</h1>
-  <button class="red" id="btnCaller">鳴らす側</button>
-  <button class="blue" id="btnListener">鳴らされる側</button>
-</div>
+<h2>NSCall DEBUG</h2>
 
-<!-- 鳴らす側 -->
-<div id="caller" class="screen">
-  <h1>呼び出し</h1>
-  <button class="red" id="callBtn">呼ぶ</button>
-  <div class="status" id="callerStatus">待機中</div>
-</div>
+<button id="btnListen">① 鳴らされる側</button>
+<button id="btnCall">② 呼ぶ</button>
 
-<!-- 鳴らされる側 -->
-<div id="listener" class="screen">
-  <h1 id="listenerTitle">音声を有効化してください</h1>
-  <button class="blue" id="enableAudio">音声ON</button>
-  <div class="status" id="listenerStatus"></div>
-</div>
+<div id="log"></div>
 
-<audio id="sound" src="sound.mp3" preload="auto"></audio>
+<audio id="audio" src="audio.mp3"></audio>
 
 <script type="module">
-/* ===== Firebase SDK ===== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  onSnapshot,
-  updateDoc,
-  serverTimestamp
+  getFirestore, doc, setDoc, onSnapshot, updateDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* ===== Firebase 設定 ===== */
+const log = msg => {
+  document.getElementById("log").innerHTML += msg + "<br>";
+};
+
+log("▶ ページ読み込み完了");
+
 const firebaseConfig = {
   apiKey: "AIzaSyA-0pjEemq37VlZHd22Wh6iCELwanieQMg",
   authDomain: "nscall-35754.firebaseapp.com",
@@ -103,58 +50,55 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+log("✔ Firebase initializeApp OK");
+
 const db = getFirestore(app);
 const ref = doc(db, "calls", "main");
 
-/* ===== DOM ===== */
-const screens = {
-  select: document.getElementById("select"),
-  caller: document.getElementById("caller"),
-  listener: document.getElementById("listener")
+const audio = document.getElementById("audio");
+
+// 音声ロード確認
+audio.onloadeddata = () => log("✔ audio.mp3 読み込み成功");
+audio.onerror = () => log("❌ audio.mp3 読み込み失敗（パス違い）");
+
+// 鳴らされる側
+btnListen.onclick = async () => {
+  log("▶ 鳴らされる側 開始");
+
+  // ユーザー操作で音声解放
+  try {
+    await audio.play();
+    audio.pause();
+    audio.currentTime = 0;
+    log("✔ 音声再生許可 OK");
+  } catch {
+    log("❌ 音声再生ブロック");
+  }
+
+  onSnapshot(ref, snap => {
+    log("📡 Firestore 変更検知");
+
+    if (snap.exists() && snap.data().ring === true) {
+      log("🔔 ring = true を検知");
+
+      audio.currentTime = 0;
+      audio.play()
+        .then(() => log("🔊 再生開始"))
+        .catch(() => log("❌ 再生失敗"));
+
+      updateDoc(ref, { ring: false });
+    }
+  });
 };
 
-const sound = document.getElementById("sound");
-
-/* ===== 画面切替 ===== */
-function show(name) {
-  Object.values(screens).forEach(s => s.classList.remove("active"));
-  screens[name].classList.add("active");
-}
-
-/* ===== 鳴らす側 ===== */
-btnCaller.onclick = () => show("caller");
-
-callBtn.onclick = async () => {
-  callerStatus.textContent = "送信中…";
+// 呼ぶ側
+btnCall.onclick = async () => {
+  log("▶ 呼ぶボタン押下");
   await setDoc(ref, {
     ring: true,
     updatedAt: serverTimestamp()
   });
-  callerStatus.textContent = "送信完了";
-};
-
-/* ===== 鳴らされる側 ===== */
-btnListener.onclick = () => show("listener");
-
-enableAudio.onclick = async () => {
-  // ★ ユーザー操作で音声を完全に解放
-  await sound.play();
-  sound.pause();
-  sound.currentTime = 0;
-
-  enableAudio.style.display = "none";
-  listenerTitle.textContent = "待機中";
-  listenerStatus.textContent = "Firebase 接続中";
-
-  // ★ ここで初めて Firestore を監視
-  onSnapshot(ref, async snap => {
-    if (snap.exists() && snap.data().ring === true) {
-      listenerTitle.textContent = "🔔 呼び出し中";
-      sound.currentTime = 0;
-      await sound.play();
-      await updateDoc(ref, { ring: false });
-    }
-  });
+  log("✔ Firestore に書き込み完了");
 };
 </script>
 
