@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>Simple Call</title>
+<style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+  margin-top: 20vh;
+}
+button {
+  font-size: 48px;
+  padding: 40px 80px;
+}
+</style>
+</head>
+<body>
+
+<h1 id="title"></h1>
+<button id="mainBtn" style="display:none"></button>
+<audio id="sound" src="sound.mp3"></audio>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot, updateDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+/* ===== Firebase 設定 ===== */
+const app = initializeApp({
+  apiKey: "XXXX",
+  authDomain: "XXXX.firebaseapp.com",
+  projectId: "XXXX"
+});
+const db = getFirestore(app);
+const ref = doc(db, "calls", "main");
+
+/* ===== 役割判定 ===== */
+const mode = new URLSearchParams(location.search).get("mode");
+
+const title = document.getElementById("title");
+const btn = document.getElementById("mainBtn");
+const audio = document.getElementById("sound");
+
+/* ===== 鳴らす側 ===== */
+if (mode === "button") {
+  title.textContent = "呼び出し";
+  btn.textContent = "呼ぶ";
+  btn.style.display = "inline-block";
+
+  btn.onclick = async () => {
+    await setDoc(ref, {
+      ring: true,
+      updatedAt: serverTimestamp()
+    });
+  };
+}
+
+/* ===== 鳴らされる側 ===== */
+if (mode === "listen") {
+  title.textContent = "待機中（タップして音声有効化）";
+  btn.textContent = "音声ON";
+  btn.style.display = "inline-block";
+
+  btn.onclick = () => {
+    audio.play().then(() => {
+      audio.pause();
+      title.textContent = "待機中";
+      btn.style.display = "none";
+    });
+  };
+
+  onSnapshot(ref, async (snap) => {
+    if (snap.exists() && snap.data().ring) {
+      audio.currentTime = 0;
+      audio.play();
+      await updateDoc(ref, { ring: false });
+    }
+  });
+}
+</script>
+</body>
+</html>
