@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>Simple Call</title>
 <style>
 body {
@@ -10,23 +10,46 @@ body {
   margin-top: 20vh;
 }
 button {
-  font-size: 48px;
-  padding: 40px 80px;
+  font-size: 36px;
+  padding: 30px 60px;
+  margin: 20px;
+}
+.hidden {
+  display: none;
 }
 </style>
 </head>
 <body>
 
-<h1 id="title"></h1>
-<button id="mainBtn" style="display:none"></button>
+<!-- ===== 役割選択 ===== -->
+<div id="select">
+  <h1>役割を選択</h1>
+  <button id="btnCaller">鳴らす側</button><br>
+  <button id="btnListener">鳴らされる側</button>
+</div>
+
+<!-- ===== 鳴らす側 ===== -->
+<div id="caller" class="hidden">
+  <h1>呼び出し</h1>
+  <button id="callBtn">呼ぶ</button>
+</div>
+
+<!-- ===== 鳴らされる側 ===== -->
+<div id="listener" class="hidden">
+  <h1 id="status">待機中（音声ONしてください）</h1>
+  <button id="audioBtn">音声ON</button>
+</div>
+
 <audio id="sound" src="sound.mp3"></audio>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot, updateDoc, serverTimestamp }
-  from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot,
+  updateDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* ===== Firebase 設定 ===== */
+/* ===== Firebase設定 ===== */
 const app = initializeApp({
   apiKey: "XXXX",
   authDomain: "XXXX.firebaseapp.com",
@@ -35,49 +58,57 @@ const app = initializeApp({
 const db = getFirestore(app);
 const ref = doc(db, "calls", "main");
 
-/* ===== 役割判定 ===== */
-const mode = new URLSearchParams(location.search).get("mode");
+/* ===== DOM ===== */
+const select = document.getElementById("select");
+const caller = document.getElementById("caller");
+const listener = document.getElementById("listener");
 
-const title = document.getElementById("title");
-const btn = document.getElementById("mainBtn");
+const btnCaller = document.getElementById("btnCaller");
+const btnListener = document.getElementById("btnListener");
+
+const callBtn = document.getElementById("callBtn");
+const audioBtn = document.getElementById("audioBtn");
+const status = document.getElementById("status");
 const audio = document.getElementById("sound");
 
 /* ===== 鳴らす側 ===== */
-if (mode === "button") {
-  title.textContent = "呼び出し";
-  btn.textContent = "呼ぶ";
-  btn.style.display = "inline-block";
+btnCaller.onclick = () => {
+  select.classList.add("hidden");
+  caller.classList.remove("hidden");
+};
 
-  btn.onclick = async () => {
-    await setDoc(ref, {
-      ring: true,
-      updatedAt: serverTimestamp()
-    });
-  };
-}
+callBtn.onclick = async () => {
+  await setDoc(ref, {
+    ring: true,
+    updatedAt: serverTimestamp()
+  });
+};
 
 /* ===== 鳴らされる側 ===== */
-if (mode === "listen") {
-  title.textContent = "待機中（タップして音声有効化）";
-  btn.textContent = "音声ON";
-  btn.style.display = "inline-block";
+btnListener.onclick = () => {
+  select.classList.add("hidden");
+  listener.classList.remove("hidden");
 
-  btn.onclick = () => {
-    audio.play().then(() => {
-      audio.pause();
-      title.textContent = "待機中";
-      btn.style.display = "none";
-    });
-  };
-
+  // リアルタイム監視開始
   onSnapshot(ref, async (snap) => {
     if (snap.exists() && snap.data().ring) {
       audio.currentTime = 0;
       audio.play();
+      status.textContent = "🔔 呼び出し中";
       await updateDoc(ref, { ring: false });
     }
   });
-}
+};
+
+// 初回音声有効化（ブラウザ対策）
+audioBtn.onclick = () => {
+  audio.play().then(() => {
+    audio.pause();
+    status.textContent = "待機中";
+    audioBtn.style.display = "none";
+  });
+};
 </script>
+
 </body>
 </html>
